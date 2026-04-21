@@ -6,7 +6,7 @@ description: >
   repos. Checks for documentation, molecule tests, and produces structured manual QA
   verification steps. Focused on OSPRH/EDPM but works for any Jira project.
 version: 1.0.0
-author: Hermes Agent
+author: Rabi Mishra
 license: MIT
 metadata:
   hermes:
@@ -26,7 +26,7 @@ issue, its epic, sub-tasks, linked PRs, code changes, documentation, and tests.
 ## Prerequisites
 
 - Jira API access: `$JIRA_API_TOKEN` env var, user's Jira instance (redhat.atlassian.net)
-- GitHub CLI (`gh`) authenticated — to inspect PRs and code changes
+- GitHub access — either GitHub MCP tools (preferred, if available) or `gh` CLI authenticated
 - Knowledge of the project structure (load relevant skills like `edpm-ansible`)
 
 ## When to Use
@@ -79,8 +79,28 @@ Comments often contain design decisions, review feedback, and testing notes.
 
 ### 2a: Search for PRs referencing the Jira key
 
-Search across the relevant repos for PRs mentioning the Jira key:
+Use **GitHub MCP tools** (preferred) or fall back to `gh` CLI:
 
+**Option A — GitHub MCP (if available):**
+```
+# Search for PRs mentioning the Jira key
+mcp_github_search_code(query="OSPRH-XXXX repo:openstack-k8s-operators")
+mcp_github_search_issues(query="OSPRH-XXXX type:pr", owner="openstack-k8s-operators")
+
+# Get PR details
+mcp_github_get_pull_request(owner="openstack-k8s-operators", repo="<repo>", pullNumber=<N>)
+
+# Get the diff
+mcp_github_get_pull_request_diff(owner="openstack-k8s-operators", repo="<repo>", pullNumber=<N>)
+
+# List files changed
+mcp_github_get_pull_request_files(owner="openstack-k8s-operators", repo="<repo>", pullNumber=<N>)
+
+# Get file contents from repo
+mcp_github_get_file_contents(owner="openstack-k8s-operators", repo="<repo>", path="<file>")
+```
+
+**Option B — gh CLI fallback:**
 ```bash
 # Search GitHub for PRs mentioning the Jira key
 gh search prs "OSPRH-XXXX" --json title,repository,url,state,number,mergedAt
@@ -93,7 +113,6 @@ gh pr list --repo openstack-k8s-operators/<repo> --search "OSPRH-XXXX" \
 Common OSPRH repos to check:
 - openstack-k8s-operators/edpm-ansible
 - openstack-k8s-operators/openstack-operator
-- openstack-k8s-operators/dataplane-operator
 - openstack-k8s-operators/heat-operator
 - openstack-k8s-operators/install_yamls
 - openstack-k8s-operators/ci-framework
@@ -102,6 +121,16 @@ Common OSPRH repos to check:
 
 For each PR found, examine the diff to understand what changed:
 
+**Option A — GitHub MCP:**
+```
+mcp_github_get_pull_request_diff(owner="<org>", repo="<repo>", pullNumber=<N>)
+mcp_github_get_pull_request_files(owner="<org>", repo="<repo>", pullNumber=<N>)
+
+# Read specific changed files for deeper analysis
+mcp_github_get_file_contents(owner="<org>", repo="<repo>", path="<file>", ref="<branch>")
+```
+
+**Option B — gh CLI:**
 ```bash
 # Get the diff for a PR
 gh pr diff <pr-number> --repo <org>/<repo>
@@ -129,6 +158,13 @@ Also look for Gerrit review links if the project uses OpenDev.
 
 ### 3a: Look for doc changes in the PRs
 
+**Option A — GitHub MCP:**
+```
+# Get files changed in PR — look for docs/, README, .rst, .md files
+mcp_github_get_pull_request_files(owner="<org>", repo="<repo>", pullNumber=<N>)
+```
+
+**Option B — gh CLI:**
 ```bash
 # Check if any PRs touch documentation
 gh pr diff <pr-number> --repo <org>/<repo> | grep -E '^\+\+\+ .*(docs|README|\.rst|\.md)'
@@ -136,6 +172,13 @@ gh pr diff <pr-number> --repo <org>/<repo> | grep -E '^\+\+\+ .*(docs|README|\.r
 
 ### 3b: Check for new/updated docs in the repo
 
+**Option A — GitHub MCP:**
+```
+mcp_github_get_file_contents(owner="<org>", repo="<repo>", path="docs")
+mcp_github_get_file_contents(owner="<org>", repo="<repo>", path="docs/source/roles")
+```
+
+**Option B — gh CLI:**
 ```bash
 # For edpm-ansible, check docs/source/roles/
 gh api repos/<org>/<repo>/contents/docs --jq '.[].name'
@@ -150,6 +193,17 @@ updates, flag this in the verification steps as a gap.
 
 ### 4a: Molecule tests (for Ansible roles)
 
+**Option A — GitHub MCP:**
+```
+# Check PR files for molecule test changes
+mcp_github_get_pull_request_files(owner="<org>", repo="<repo>", pullNumber=<N>)
+# Filter results for paths containing "molecule/"
+
+# Check if the role has molecule tests
+mcp_github_get_file_contents(owner="<org>", repo="<repo>", path="roles/<role>/molecule")
+```
+
+**Option B — gh CLI:**
 ```bash
 # Check if PRs include molecule test changes
 gh pr diff <pr-number> --repo <org>/<repo> | grep -E '^\+\+\+ .*molecule/'
@@ -160,6 +214,9 @@ gh api repos/<org>/<repo>/contents/roles/<role>/molecule --jq '.[].name'
 
 ### 4b: Unit tests
 
+**Option A — GitHub MCP:** Filter PR files for paths containing `tests/` or `test_`.
+
+**Option B — gh CLI:**
 ```bash
 # Check for pytest/unittest changes
 gh pr diff <pr-number> --repo <org>/<repo> | grep -E '^\+\+\+ .*(tests/|test_)'
@@ -167,7 +224,9 @@ gh pr diff <pr-number> --repo <org>/<repo> | grep -E '^\+\+\+ .*(tests/|test_)'
 
 ### 4c: Integration/CI tests
 
-Check the Zuul or GitHub Actions CI definitions for new test jobs:
+**Option A — GitHub MCP:** Filter PR files for paths containing `zuul.d/` or `.github/workflows/`.
+
+**Option B — gh CLI:**
 ```bash
 gh pr diff <pr-number> --repo <org>/<repo> | grep -E '^\+\+\+ .*(zuul\.d/|\.github/workflows/)'
 ```
